@@ -20,6 +20,7 @@ SSH=(ssh -i "$VPS_SSH_KEY" -o StrictHostKeyChecking=accept-new "${VPS_USER}@${VP
 RSYNC=(rsync -az --delete
   -e "ssh -i $VPS_SSH_KEY -o StrictHostKeyChecking=accept-new"
   --exclude .env
+  --exclude .env.production
   --exclude .git
   --exclude data/buybox-history.jsonl
   --exclude data/db.json

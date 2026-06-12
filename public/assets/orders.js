@@ -2,10 +2,17 @@
 
 (function () {
 const bootstrap = JSON.parse(document.getElementById('bootstrap').textContent);
+const isMultiChannel = Boolean(bootstrap.multiChannel);
 const isChannelPage = Boolean(bootstrap.channelId);
+const isEmbeddedChannel = isChannelPage && !isMultiChannel;
 const ORDERS_API = bootstrap.apiPath || '/api/orders';
 const ORDERS_EXPORT_API = bootstrap.exportPath || '/api/orders/export';
 const channelLabel = bootstrap.channelLabel || 'Trendyol Pazaryeri';
+const MARKETNEXT_CHANNEL_ROUTES = {
+  'uber-eats': '/marketnext/orders/uber-eats',
+  'yemeksepeti': '/marketnext/orders/yemeksepeti',
+  getir: '/marketnext/orders/getir'
+};
 const tableWrap = document.getElementById('ordersTableWrap');
 const tableBody = document.getElementById('ordersBody');
 const footerEl = document.getElementById('ordersFooter');
@@ -143,8 +150,10 @@ let lastMatchingSummary = null;
 let pendingOrderNumber = null;
 let orderDeepLinkHandled = false;
 let activeOrdersView = 'orders';
+let activeChannelFilter = 'all';
+let lastMarketNextChannels = null;
 
-const COL_COUNT = 8;
+const COL_COUNT = isMultiChannel ? 9 : 8;
 const qualityBannerEl = document.getElementById('ordersQualityBanner');
 const matchingBannerEl = document.getElementById('ordersMatchingBanner');
 const matchingStripEl = document.getElementById('ordersMatchingStrip');
@@ -158,7 +167,8 @@ if (bootstrap.authRequired && !getStoredToken()) {
   setDefaultCustomDates();
   applyInitialQueryParams();
   if (!isChannelPage) loadEmailSettings();
-  if (isChannelPage) window.BuyBoxChannelPage?.setOrdersLoading(true);
+  if (isEmbeddedChannel) window.BuyBoxChannelPage?.setOrdersLoading(true);
+  syncChannelFilterTabs();
   loadOrders();
 }
 
@@ -183,6 +193,11 @@ function applyInitialQueryParams() {
   const matching = params.get('matching');
   if (matching && matchingFilter && ['all', 'unmapped', 'needs_review'].includes(matching)) {
     matchingFilter.value = matching;
+  }
+  const channel = String(params.get('channel') || '').trim();
+  if (isMultiChannel && channel) {
+    activeChannelFilter = channel;
+    syncChannelFilterTabs();
   }
   const view = String(params.get('view') || '').trim();
   if (view === 'loss-products' && uberLossProductsPanel) {
@@ -272,6 +287,18 @@ function bindEvents() {
 
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) logoutBtn.addEventListener('click', logout);
+
+  const channelFilterRoot = document.getElementById('marketnextChannelFilters');
+  if (channelFilterRoot) {
+    channelFilterRoot.querySelectorAll('[data-channel]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        activeChannelFilter = btn.dataset.channel || 'all';
+        syncChannelFilterTabs();
+        syncChannelQueryParam();
+        loadOrders();
+      });
+    });
+  }
 
   window.BuyBoxCommon?.initPlatformNav?.();
 
@@ -413,7 +440,84 @@ function buildQueryParams() {
   } else {
     params.set('days', daysSelect.value || '14');
   }
+  if (isMultiChannel && activeChannelFilter !== 'all') {
+    params.set('channel', activeChannelFilter);
+  }
   return params;
+}
+
+function syncChannelFilterTabs() {
+  const channelFilterRoot = document.getElementById('marketnextChannelFilters');
+  if (!channelFilterRoot) return;
+  channelFilterRoot.querySelectorAll('[data-channel]').forEach((btn) => {
+    const active = (btn.dataset.channel || 'all') === activeChannelFilter;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+}
+
+function syncChannelQueryParam() {
+  if (!isMultiChannel) return;
+  const params = new URLSearchParams(window.location.search);
+  if (activeChannelFilter && activeChannelFilter !== 'all') params.set('channel', activeChannelFilter);
+  else params.delete('channel');
+  const qs = params.toString();
+  const next = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+  window.history.replaceState({}, '', next);
+}
+
+function renderChannelCell(row) {
+  const channelId = row.channel || row.channelId || '';
+  const label = row.channelLabel || channelId || '—';
+  const route = MARKETNEXT_CHANNEL_ROUTES[channelId];
+  const logo = channelId && window.BuyBoxChannelLogos?.render
+    ? window.BuyBoxChannelLogos.render(channelId, { size: 'xs' })
+    : '';
+  if (route) {
+    return logo + '<a class="orders-channel-link" href="' + esc(route) + '">' + esc(label) + '</a>';
+  }
+  return logo + esc(label);
+}
+
+function renderMultiChannelSourceNote(data) {
+  if (!isMultiChannel) return;
+  const footerEl = document.getElementById('ordersSourceNote');
+  if (!footerEl) return;
+  const parts = (data.channels || [])
+    .filter((entry) => entry.available)
+    .map((entry) => {
+      let text = `${entry.label}: ${entry.total}`;
+      if (entry.skipped) text += ' (API beklemede)';
+      return text;
+    });
+  footerEl.textContent = parts.length
+    ? parts.join(' · ')
+    : 'Aktif kanal bulunamadı — MarketNext → Kanal Ayarları bölümünden API bilgilerini kontrol edin.';
+  footerEl.hidden = false;
+  updateChannelTabCounts(data.channels || []);
+}
+
+function updateChannelTabCounts(channelsMeta) {
+  if (!isMultiChannel) return;
+  const root = document.getElementById('marketnextChannelFilters');
+  if (!root) return;
+
+  let allCount = 0;
+  for (const entry of channelsMeta) {
+    const total = Number(entry.total) || 0;
+    if (entry.available) allCount += total;
+    const countEl = root.querySelector(`[data-count-for="${entry.id}"]`);
+    if (countEl) {
+      countEl.textContent = entry.available ? String(total) : '—';
+      countEl.classList.toggle('is-empty', entry.available && total === 0);
+    }
+  }
+
+  const allCountEl = root.querySelector('[data-count-for="all"]');
+  if (allCountEl) {
+    allCountEl.textContent = String(allCount);
+    allCountEl.classList.toggle('is-empty', allCount === 0);
+  }
 }
 
 function renderYemeksepetiEmptyHint(data) {
@@ -439,7 +543,7 @@ function renderYemeksepetiEmptyHint(data) {
     'Yemeksepeti Partner API bu dönemde <strong>0</strong> sipariş döndürdü' +
     (sources.opsWebhook ? ` · Webhook/Ops kaynağında <strong>${sources.opsWebhook}</strong> kayıt var (tam gövde eksik olabilir)` : '') +
     '. Canlı siparişler webhook ile gelir — ' +
-    '<a href="/quick-commerce/integrations">Hızlı Teslimat → Entegrasyonlar</a> ve ' +
+    '<a href="/marketnext/integrations">MarketNext → Kanal Ayarları</a> ve ' +
     '<a href="https://partner-app.yemeksepeti.com/" target="_blank" rel="noopener">Partner Portal</a> → Shop Integrations loglarını kontrol edin.';
 }
 
@@ -463,6 +567,7 @@ async function loadOrders(forceRefresh = false) {
 
     allRows = data.rows || [];
     fetchedCount = data.fetched ?? allRows.length;
+    lastMarketNextChannels = data.channels || null;
     lastDataQuality = data.dataQuality || null;
     lastOrderSources = data.orderSources || null;
     lastMatchingSummary = data.matchingSummary || null;
@@ -477,7 +582,7 @@ async function loadOrders(forceRefresh = false) {
       matchingSummary: data.matchingSummary,
       orderSources: data.orderSources
     });
-    if (isChannelPage) {
+    if (isEmbeddedChannel) {
       window.BuyBoxChannelPage?.updateOrdersStatus({
         configured: true,
         skipped: Boolean(data.skipped),
@@ -490,6 +595,7 @@ async function loadOrders(forceRefresh = false) {
       });
     }
     renderYemeksepetiEmptyHint(data);
+    renderMultiChannelSourceNote(data);
     if (data.skipped) {
       showToast(data.message + ' (' + data.cooldownSeconds + ' sn)');
       return;
@@ -511,7 +617,7 @@ async function loadOrders(forceRefresh = false) {
       lossProductsBody.innerHTML = '<tr><td colspan="10" class="orders-loading">' + esc(error.message) + '</td></tr>';
     }
     footerEl.textContent = 'Yüklenemedi: ' + error.message;
-    if (isChannelPage) {
+    if (isEmbeddedChannel) {
       window.BuyBoxChannelPage?.updateOrdersStatus({
         configured: !String(error.message || '').includes('API bilgileri eksik'),
         error: error.message || 'Yüklenemedi'
@@ -572,6 +678,7 @@ function refreshView(meta) {
   if (activeOrdersView !== 'loss-products') {
     footerEl.textContent = footer;
   }
+  if (isMultiChannel) renderMultiChannelSourceNote({ channels: lastMarketNextChannels || [] });
   tryOpenPendingOrder();
 }
 
@@ -1187,8 +1294,12 @@ function renderRow(row, index) {
   const matchBadge = matchingEnabled() && orderMatchesMatchingFilter(row, 'unmapped')
     ? '<span class="orders-match-dot" title="Eşleşmemiş ürün satırı">◎</span> '
     : '';
+  const channelCell = isMultiChannel
+    ? '<td>' + renderChannelCell(row) + '</td>'
+    : '';
 
   return '<tr' + (rowClasses.length ? ' class="' + rowClasses.join(' ') + '"' : '') + '>' +
+    channelCell +
     '<td>' + warnBadge + matchBadge + sourceBadge + confidenceBadge + esc(row.orderNumber) + '</td>' +
     '<td>' + esc(formatOrderDate(row.orderDateMs)) + '</td>' +
     '<td><span class="orders-status-pill">' + esc(translateStatus(row.status) || '—') + '</span></td>' +
@@ -1216,6 +1327,7 @@ function openDetail(index) {
       ? '<p class="orders-warn-box">' + esc(allWarnings.join(' · ')) + '</p>'
       : '') +
     '<div class="detail-grid">' +
+      (isMultiChannel ? detailItem('Kanal', row.channelLabel || row.channel || '—') : '') +
       detailItem('Sipariş tarihi', formatOrderDate(row.orderDateMs)) +
       detailItem('Durum', translateStatus(row.status) || '—') +
       detailItem('Kaynak', row.ingestSource || '—') +
@@ -1258,12 +1370,13 @@ function matchingEnabled() {
   return String(bootstrap.productMatchingMode || 'legacy') !== 'legacy';
 }
 
-function buildPoolMatchUrl(line) {
+function buildPoolMatchUrl(line, orderChannelId) {
   if (line.poolMatchUrl) return line.poolMatchUrl;
-  if (!matchingEnabled() || !bootstrap.channelId) return '';
+  const channelId = orderChannelId || bootstrap.channelId;
+  if (!matchingEnabled() || !channelId) return '';
   const barcode = String(line.barcode || '').trim();
   if (!barcode) return '';
-  return buildPoolMatchUrlForStatus(barcode, line.mappingStatus || 'legacy', bootstrap.channelId);
+  return buildPoolMatchUrlForStatus(barcode, line.mappingStatus || 'legacy', channelId);
 }
 
 function buildPoolMatchUrlForStatus(barcode, mappingStatus, channelId = bootstrap.channelId) {
@@ -1353,14 +1466,16 @@ function renderLossProductNameCell(item) {
 }
 
 function renderMatchingActions(row) {
-  if (!matchingEnabled() || !bootstrap.channelId) return '';
+  if (!matchingEnabled()) return '';
+  const channelId = row.channel || row.channelId || bootstrap.channelId;
+  if (!channelId) return '';
   const lines = row.lines || [];
   if (!lines.length) return '';
 
   const chips = [];
   const seen = new Set();
   for (const line of lines) {
-    const url = buildPoolMatchUrl(line);
+    const url = buildPoolMatchUrl(line, channelId);
     const barcode = String(line.barcode || '').trim();
     if (!url || !barcode || seen.has(barcode)) continue;
     seen.add(barcode);
@@ -1505,7 +1620,7 @@ async function exportReport() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = (bootstrap.channelId || 'siparis') + '-karlilik.csv';
+  a.download = (isMultiChannel ? 'marketnext' : (bootstrap.channelId || 'siparis')) + '-karlilik.csv';
   a.click();
   URL.revokeObjectURL(url);
   showToast('Rapor indirildi.');

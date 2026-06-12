@@ -7,7 +7,7 @@ import { ensureDefaultBranch } from '../lib/ops-hub/db/repository.js';
 import { syncYemeksepetiReadOnly } from '../lib/ops-hub/sync/ys-sync.js';
 
 async function main() {
-  const days = Number(process.argv[2] || 7);
+  const days = Number(process.argv[2] || 14);
   const platformEnv = await readEnvFile(paths.platformEnv);
   const config = resolveOpsHubConfig(platformEnv);
 

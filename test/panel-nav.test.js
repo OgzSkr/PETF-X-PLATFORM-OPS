@@ -28,6 +28,9 @@ test('findNavItemByPath resolves legacy alias paths to MarketNext', () => {
   assert.equal(urunler?.module.id, 'marketplace');
   const uber = findNavItemByPath('/uber-eats');
   assert.equal(uber?.module.id, 'marketnext');
+  assert.equal(uber?.item.id, 'uber-eats');
+  const ys = findNavItemByPath('/yemeksepeti');
+  assert.equal(ys?.item.id, 'yemeksepeti');
   const woo = findNavItemByPath('/woocommerce');
   assert.equal(woo?.module.id, 'ecommerce');
 });

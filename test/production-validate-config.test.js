@@ -28,3 +28,19 @@ test('validateProductionConfig passes with minimal valid config', () => {
   const result = validateProductionConfig(env, env);
   assert.equal(result.ok, true);
 });
+
+test('validateProductionConfig allows short panel token when explicitly enabled', () => {
+  const env = {
+    NODE_ENV: 'production',
+    OPS_POSTGRES_URL: 'postgresql://u:p@localhost/db',
+    PLATFORM_API_TOKEN: '1234',
+    PANEL_ALLOW_SIMPLE_TOKEN: 'true',
+    OPS_PUBLIC_API_BASE_URL: 'https://api.petfix.com.tr',
+    YEMEKSEPETI_WEBHOOK_SECRET: 'wh-secret',
+    YEMEKSEPETI_CLIENT_ID: 'cid',
+    YEMEKSEPETI_CLIENT_SECRET: 'csec',
+    YEMEKSEPETI_VENDOR_ID: 'vid'
+  };
+  const result = validateProductionConfig(env, env);
+  assert.equal(result.ok, true);
+});

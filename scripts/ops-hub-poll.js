@@ -11,7 +11,7 @@ function parseArgs(argv) {
   const args = {
     channels: ['trendyol_go', 'yemeksepeti'],
     tgoLimit: 50,
-    ysDays: 1,
+    ysDays: 14,
     activeOnly: true
   };
 
@@ -43,7 +43,7 @@ function printHelp() {
   --tgo-only           Yalnızca Trendyol Go sync
   --ys-only            Yalnızca Yemeksepeti poll sync
   --tgo-limit <n>      TGO paket limiti (varsayılan 50)
-  --ys-days <n>        YS gün geriye (varsayılan 1)
+  --ys-days <n>        YS gün geriye (varsayılan 14)
   --no-active-only     TGO tüm durumları çek
 `);
 }

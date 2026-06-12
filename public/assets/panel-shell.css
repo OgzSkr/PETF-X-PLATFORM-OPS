@@ -100,6 +100,18 @@ body.pf-body {
   text-align: center;
 }
 
+.pf-nav-tag {
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
 .pf-sidebar-foot {
   margin-top: auto;
   padding: 12px 8px;

@@ -33,7 +33,6 @@ function initTariffPage(bootstrap) {
   bindTariffUi();
   initTariffFormDefaults();
   applyTariffQueryParams();
-  C.initPlatformNav?.();
   window.CatalogView?.init?.();
   window.TrackView?.init?.();
   applyWorkspaceViewFromQuery();

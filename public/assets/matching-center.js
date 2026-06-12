@@ -150,7 +150,6 @@ function bootMatchingCenter() {
     return;
   }
   try {
-    common.initPlatformNav?.();
     bindEvents();
     initMasterFilterOptions();
     initMasterMappingStatusGate();

@@ -13,7 +13,12 @@ echo "==> 1/8 Image build"
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build api
 
 echo "==> 2/8 Tests"
-npm test
+if command -v node >/dev/null 2>&1; then
+  npm test
+else
+  echo "host node yok — testler container içinde çalıştırılıyor"
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" run --rm --no-deps api node --test test/*.test.js
+fi
 
 echo "==> 3/8 Production config validation"
 NODE_ENV=production PETFIX_ENV_FILE="$ENV_FILE" node -e "
@@ -28,6 +33,12 @@ echo "==> 4/8 Migration"
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" run --rm api node scripts/ops-hub-migrate.js
 
 echo "==> 5/8 Service start/update"
+mkdir -p data
+# Container petfix uid=100 — host'ta da 100:101 olmalı (VPS'te genelde _apt:input)
+chown -R 100:101 data 2>/dev/null || sudo chown -R 100:101 data 2>/dev/null || true
+if id -u petfix >/dev/null 2>&1 && [[ "$(stat -c '%u' data 2>/dev/null || echo 0)" != "100" ]]; then
+  chown -R 100:101 data 2>/dev/null || sudo chown -R 100:101 data 2>/dev/null || true
+fi
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
 
 echo "==> 6/8 Readiness"

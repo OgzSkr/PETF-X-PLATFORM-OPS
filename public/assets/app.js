@@ -1,7 +1,5 @@
 'use strict';
 
-const TOKEN_KEY = 'platformApiToken';
-
 let DATA = [];
 let selectedBarcode = '';
 let activeView = 'all';
@@ -127,8 +125,6 @@ function bindUi() {
   if (logoutBtn) {
     logoutBtn.addEventListener('click', logout);
   }
-
-  window.BuyBoxCommon?.initPlatformNav?.();
 
   bindBuyboxTableEvents();
 
@@ -829,38 +825,19 @@ function setBusy(button, busy) {
 }
 
 function getStoredToken() {
-  return sessionStorage.getItem(TOKEN_KEY) || '';
+  return window.BuyBoxCommon.getStoredToken();
 }
 
 function redirectToLogin() {
-  const next = encodeURIComponent(window.location.pathname + window.location.search);
-  window.location.href = '/login?next=' + next;
+  window.BuyBoxCommon.redirectToLogin();
 }
 
 function logout() {
-  sessionStorage.removeItem(TOKEN_KEY);
-  redirectToLogin();
-}
-
-function apiHeaders(includeJson = true) {
-  const headers = {};
-  if (includeJson) headers['Content-Type'] = 'application/json';
-  const token = getStoredToken();
-  if (token) headers.Authorization = 'Bearer ' + token;
-  return headers;
+  window.BuyBoxCommon.logout();
 }
 
 async function authFetch(url, options = {}) {
-  const response = await fetch(url, {
-    ...options,
-    headers: { ...apiHeaders(options.body !== undefined), ...options.headers }
-  });
-  if (response.status === 401) {
-    sessionStorage.removeItem(TOKEN_KEY);
-    redirectToLogin();
-    throw new Error('Yetkisiz');
-  }
-  return response;
+  return window.BuyBoxCommon.authFetch(url, options);
 }
 
 async function refreshDashboard() {

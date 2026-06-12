@@ -152,6 +152,10 @@ let orderDeepLinkHandled = false;
 let activeOrdersView = 'orders';
 let activeChannelFilter = 'all';
 let lastMarketNextChannels = null;
+let lastUpdatedAt = null;
+let lastFromCache = false;
+let ordersPageSize = 50;
+let ordersPage = 1;
 
 const COL_COUNT = isMultiChannel ? 9 : 8;
 const qualityBannerEl = document.getElementById('ordersQualityBanner');
@@ -281,6 +285,7 @@ function bindEvents() {
         sortKey = key;
         sortDir = 'desc';
       }
+      ordersPage = 1;
       renderTable();
     });
   });
@@ -299,8 +304,6 @@ function bindEvents() {
       });
     });
   }
-
-  window.BuyBoxCommon?.initPlatformNav?.();
 
   const emailSave = document.getElementById('emailSave');
   if (emailSave) {
@@ -576,6 +579,8 @@ async function loadOrders(forceRefresh = false) {
       endMs: data.range?.endMs || 0
     };
     activeDays = Number(data.range?.days) || Number(params.get('days')) || 30;
+    lastUpdatedAt = data.updatedAt ? Date.parse(data.updatedAt) : Date.now();
+    lastFromCache = Boolean(data.skipped);
     populateStatusOptions(data.statuses || []);
     refreshView({
       dataQuality: data.dataQuality,
@@ -638,6 +643,7 @@ function populateStatusOptions(statuses) {
 
 function translateStatus(status) {
   const map = {
+    // Trendyol
     Created: 'Oluşturuldu',
     Picking: 'Hazırlanıyor',
     Invoiced: 'Faturalandı',
@@ -648,12 +654,56 @@ function translateStatus(status) {
     Returned: 'İade',
     Repack: 'Yeniden paketlendi',
     UnPacked: 'Paket açıldı',
-    Awaiting: 'Bekliyor'
+    Awaiting: 'Bekliyor',
+    // Yemeksepeti / Uber Eats / Ops
+    RECEIVED: 'Alındı',
+    ACCEPTED: 'Kabul edildi',
+    IN_PREPARATION: 'Hazırlanıyor',
+    PICKING: 'Toplanıyor',
+    READY_FOR_PICKUP: 'Teslime hazır',
+    DISPATCHED: 'Yola çıktı',
+    DELIVERED: 'Teslim edildi',
+    COMPLETED: 'Tamamlandı',
+    CANCELLED: 'İptal',
+    CANCELED: 'İptal',
+    received: 'Alındı',
+    picking: 'Toplanıyor',
+    picked: 'Toplandı',
+    ready: 'Hazır',
+    completed: 'Tamamlandı',
+    cancelled: 'İptal',
+    blocked: 'Engellendi',
+    accepted: 'Kabul edildi',
+    delivered: 'Teslim edildi',
+    finished: 'Tamamlandı',
+    failed: 'Başarısız'
   };
   return map[status] || status;
 }
 
+function translateSource(source) {
+  const map = {
+    partner_api: 'Partner API',
+    webhook: 'Canlı (webhook)',
+    manual: 'Manuel',
+    fixture: 'Test verisi'
+  };
+  return map[source] || source || '—';
+}
+
+function translateConfidence(confidence) {
+  const map = {
+    complete: 'Tam',
+    estimated: 'Tahmini',
+    missing_cost: 'Maliyet eksik',
+    missing_mapping: 'Eşleşme eksik',
+    invalid_data: 'Geçersiz veri'
+  };
+  return map[confidence] || confidence || '—';
+}
+
 function refreshView(meta) {
+  ordersPage = 1;
   const rows = filteredRows();
   const dq = meta?.dataQuality ?? lastDataQuality;
   renderSummary(rows, dq, {
@@ -674,6 +724,10 @@ function refreshView(meta) {
   let footer = shown + ' sipariş gösteriliyor' + fetchedNote;
   if (dq && dq.withWarnings > 0) {
     footer += ' · ' + dq.withWarnings + ' uyarılı kayıt';
+  }
+  if (lastUpdatedAt) {
+    const time = new Date(lastUpdatedAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    footer += ' · Son güncelleme: ' + time + (lastFromCache ? ' (önbellek)' : '');
   }
   if (activeOrdersView !== 'loss-products') {
     footerEl.textContent = footer;
@@ -1027,12 +1081,15 @@ function renderLossProductRow(item) {
   '</tr>';
 }
 
+/** Backend isProfitKpiIncluded ile aynı kural: yalnızca complete/estimated güvenli kabul edilir. */
+function isKpiIncludedRow(row) {
+  if (row.ingestSource === 'fixture') return false;
+  const confidence = row.profitConfidence || 'complete';
+  return confidence === 'complete' || confidence === 'estimated';
+}
+
 function buildStats(rows) {
-  const kpiRows = rows.filter((row) => {
-    if (row.ingestSource === 'fixture') return false;
-    if (row.profitConfidence === 'missing_cost' || row.profitConfidence === 'invalid_data') return false;
-    return true;
-  });
+  const kpiRows = rows.filter(isKpiIncludedRow);
 
   let totalSales = 0;
   let totalProfit = 0;
@@ -1109,7 +1166,7 @@ function renderQualityBanner(dataQuality) {
 
 function matchingPoolUrl() {
   const channelId = bootstrap.channelId || 'trendyol-marketplace';
-  return '/products?tab=' + encodeURIComponent(channelId);
+  return (bootstrap.matchingPath || '/marketnext/matching') + '?tab=' + encodeURIComponent(channelId);
 }
 
 function renderMatchingSummary(summary) {
@@ -1190,7 +1247,8 @@ function buildTimelineFromRows(rows, mode) {
 function renderChart(rows) {
   if (!chartWrap) return;
 
-  const data = buildTimelineFromRows(rows || filteredRows(), chartMode);
+  // Özet KPI ile aynı güven filtresi — grafik ve üst kartlar aynı kümeyi anlatsın.
+  const data = buildTimelineFromRows((rows || filteredRows()).filter(isKpiIncludedRow), chartMode);
   if (!data.length) {
     chartWrap.innerHTML = '<p class="orders-chart-empty">Seçili filtreler için grafik verisi yok.</p>';
     return;
@@ -1256,6 +1314,62 @@ function sortedRows(rows) {
   return sorted;
 }
 
+function ensureOrdersPagination() {
+  let bar = document.getElementById('ordersPagination');
+  if (bar || !tableWrap) return bar;
+  bar = document.createElement('div');
+  bar.id = 'ordersPagination';
+  bar.className = 'orders-pagination';
+  tableWrap.insertAdjacentElement('afterend', bar);
+  return bar;
+}
+
+function renderOrdersPagination(total) {
+  const bar = ensureOrdersPagination();
+  if (!bar) return;
+
+  if (!total || total <= 25) {
+    bar.innerHTML = '';
+    bar.hidden = true;
+    return;
+  }
+
+  const totalPages = ordersPageSize === 0 ? 1 : Math.max(1, Math.ceil(total / ordersPageSize));
+  if (ordersPage > totalPages) ordersPage = totalPages;
+
+  const sizeOptions = [25, 50, 100, 0].map((size) => {
+    const label = size === 0 ? 'Tümü' : String(size);
+    return '<option value="' + size + '"' + (size === ordersPageSize ? ' selected' : '') + '>' + label + '</option>';
+  }).join('');
+
+  bar.hidden = false;
+  bar.innerHTML =
+    '<label class="orders-page-size">Sayfa başına ' +
+      '<select id="ordersPageSizeSelect">' + sizeOptions + '</select>' +
+    '</label>' +
+    '<div class="orders-page-nav">' +
+      '<button type="button" class="btn-detail" id="ordersPagePrev"' + (ordersPage <= 1 ? ' disabled' : '') + '>‹ Önceki</button>' +
+      '<span class="orders-page-info">' + ordersPage + ' / ' + totalPages + '</span>' +
+      '<button type="button" class="btn-detail" id="ordersPageNext"' + (ordersPage >= totalPages ? ' disabled' : '') + '>Sonraki ›</button>' +
+    '</div>';
+
+  document.getElementById('ordersPageSizeSelect')?.addEventListener('change', (e) => {
+    ordersPageSize = Number(e.target.value) || 0;
+    ordersPage = 1;
+    renderTable();
+  });
+  document.getElementById('ordersPagePrev')?.addEventListener('click', () => {
+    if (ordersPage > 1) {
+      ordersPage -= 1;
+      renderTable();
+    }
+  });
+  document.getElementById('ordersPageNext')?.addEventListener('click', () => {
+    ordersPage += 1;
+    renderTable();
+  });
+}
+
 function renderTable() {
   const rows = sortedRows(filteredRows());
 
@@ -1266,14 +1380,36 @@ function renderTable() {
   });
 
   if (!rows.length) {
-    tableBody.innerHTML = '<tr><td colspan="' + COL_COUNT + '" class="orders-loading">Kayıt bulunamadı.</td></tr>';
+    renderOrdersPagination(0);
+    const hasActiveFilter = (statusFilter && statusFilter.value) ||
+      (profitFilter && profitFilter.value !== 'all') ||
+      (matchingFilter && matchingFilter.value !== 'all');
+    tableBody.innerHTML =
+      '<tr><td colspan="' + COL_COUNT + '" class="orders-empty">' +
+        '<div class="orders-empty-state">' +
+          '<span class="orders-empty-icon" aria-hidden="true">📭</span>' +
+          '<strong>' + (hasActiveFilter ? 'Filtrelere uyan sipariş yok' : 'Bu dönemde sipariş yok') + '</strong>' +
+          '<span>' + (hasActiveFilter
+            ? 'Filtreleri temizleyerek tüm siparişleri görebilirsiniz.'
+            : 'Tarih aralığını genişletmeyi veya "Verileri Güncelle" ile yeniden çekmeyi deneyin.') + '</span>' +
+          (hasActiveFilter ? '<button type="button" class="btn-ghost orders-empty-clear" id="ordersEmptyClearBtn">Filtreleri Temizle</button>' : '') +
+        '</div>' +
+      '</td></tr>';
+    document.getElementById('ordersEmptyClearBtn')?.addEventListener('click', clearFilters);
     return;
   }
 
-  tableBody.innerHTML = rows.map((row, index) => renderRow(row, index)).join('');
+  const totalPages = ordersPageSize === 0 ? 1 : Math.max(1, Math.ceil(rows.length / ordersPageSize));
+  if (ordersPage > totalPages) ordersPage = totalPages;
+  const startIndex = ordersPageSize === 0 ? 0 : (ordersPage - 1) * ordersPageSize;
+  const pageRows = ordersPageSize === 0 ? rows : rows.slice(startIndex, startIndex + ordersPageSize);
+
+  // data-detail global (sıralı liste) indeksi taşır — openDetail tüm listede arar.
+  tableBody.innerHTML = pageRows.map((row, index) => renderRow(row, startIndex + index)).join('');
   tableBody.querySelectorAll('[data-detail]').forEach((btn) => {
     btn.addEventListener('click', () => openDetail(Number(btn.dataset.detail)));
   });
+  renderOrdersPagination(rows.length);
 }
 
 function renderRow(row, index) {
@@ -1286,10 +1422,10 @@ function renderRow(row, index) {
     ? '<span class="orders-warn-dot" title="' + escAttr(row.dataWarnings.join(' · ')) + '">!</span> '
     : '';
   const sourceBadge = row.ingestSource
-    ? '<span class="orders-source-pill" title="Kaynak">' + esc(row.ingestSource) + '</span> '
+    ? '<span class="orders-source-pill" title="Sipariş kaynağı">' + esc(translateSource(row.ingestSource)) + '</span> '
     : '';
   const confidenceBadge = row.profitConfidence && row.profitConfidence !== 'complete'
-    ? '<span class="orders-confidence-pill" title="Kâr güveni">' + esc(row.profitConfidence) + '</span> '
+    ? '<span class="orders-confidence-pill orders-confidence-' + escAttr(row.profitConfidence) + '" title="Kâr güveni">' + esc(translateConfidence(row.profitConfidence)) + '</span> '
     : '';
   const matchBadge = matchingEnabled() && orderMatchesMatchingFilter(row, 'unmapped')
     ? '<span class="orders-match-dot" title="Eşleşmemiş ürün satırı">◎</span> '
@@ -1330,8 +1466,8 @@ function openDetail(index) {
       (isMultiChannel ? detailItem('Kanal', row.channelLabel || row.channel || '—') : '') +
       detailItem('Sipariş tarihi', formatOrderDate(row.orderDateMs)) +
       detailItem('Durum', translateStatus(row.status) || '—') +
-      detailItem('Kaynak', row.ingestSource || '—') +
-      detailItem('Kâr güveni', row.profitConfidence || '—') +
+      detailItem('Kaynak', translateSource(row.ingestSource)) +
+      detailItem('Kâr güveni', translateConfidence(row.profitConfidence)) +
       detailItem('Sipariş tutarı', '₺' + formatMoney(row.salesAmount)) +
       detailItem('Ürün maliyeti', '₺' + formatMoney(row.productCost)) +
       detailItem('Ek maliyet', '₺' + formatMoney(row.extraCost)) +

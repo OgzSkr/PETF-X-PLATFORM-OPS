@@ -69,7 +69,7 @@ After=docker.service
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/petfix/buybox-platform
-ExecStart=/usr/bin/docker run --rm --network host -v /opt/petfix/buybox-platform:/app -w /app --env-file /opt/petfix/buybox-platform/.env -e OPS_POSTGRES_URL=postgresql://petfix:petfix@127.0.0.1:5433/petfix_ops node:22-alpine node scripts/ops-hub-poll.js
+ExecStart=/usr/bin/docker exec petfix-prod-api node scripts/ops-hub-poll.js --ys-days 14 --tgo-limit 50
 UNIT
 cat > /tmp/petfix-ops-poll.timer <<'UNIT'
 [Unit]

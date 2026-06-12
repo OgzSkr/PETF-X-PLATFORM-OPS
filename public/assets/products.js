@@ -1,6 +1,5 @@
 'use strict';
 
-const TOKEN_KEY = 'platformApiToken';
 const bootstrap = JSON.parse(document.getElementById('bootstrap').textContent);
 const costScope = bootstrap.costScope || 'trendyol-marketplace';
 const costScopeLabel = bootstrap.costScopeLabel || 'Trendyol Pazaryeri';
@@ -12,6 +11,9 @@ const toastEl = document.getElementById('productsToast');
 const filterForm = document.getElementById('filterForm');
 
 let tableScale = 0.75;
+let productRows = [];
+let productsPageSize = 50;
+let productsPage = 1;
 
 if (bootstrap.authRequired && !getStoredToken()) {
   redirectToLogin();
@@ -51,8 +53,6 @@ function bindEvents() {
 
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) logoutBtn.addEventListener('click', logout);
-
-  window.BuyBoxCommon?.initPlatformNav?.();
 
   tableBody.addEventListener('input', onFieldInput);
   tableBody.addEventListener('change', onFieldInput);
@@ -115,9 +115,11 @@ async function loadProducts() {
     return;
   }
   const data = await response.json();
-  renderTable(data.rows || []);
+  productRows = data.rows || [];
+  productsPage = 1;
+  renderTable(productRows);
   updateProductsSummary(data);
-  footerEl.textContent = (data.rows || []).length + ' ürün listeleniyor (' + costScopeLabel + ', toplam ' + data.total + ')';
+  footerEl.textContent = productRows.length + ' ürün listeleniyor (' + costScopeLabel + ', toplam ' + data.total + ')';
 }
 
 function updateProductsSummary(data) {
@@ -132,14 +134,83 @@ function updateProductsSummary(data) {
   set('productsSummaryFiltered', data.filtered ?? (data.rows || []).length);
 }
 
-function renderTable(rows) {
-  if (!rows.length) {
-    const colSpan = isChannelCostsPage ? 11 : 14;
-    tableBody.innerHTML = '<tr><td colspan="' + colSpan + '" style="text-align:center;padding:24px;color:#6b7280">Kayıt bulunamadı.</td></tr>';
+function ensureProductsPagination() {
+  let bar = document.getElementById('productsPagination');
+  if (bar || !tableWrap) return bar;
+  bar = document.createElement('div');
+  bar.id = 'productsPagination';
+  bar.className = 'products-pagination';
+  tableWrap.insertAdjacentElement('afterend', bar);
+  return bar;
+}
+
+function renderProductsPagination(total) {
+  const bar = ensureProductsPagination();
+  if (!bar) return;
+
+  if (!total || total <= 25) {
+    bar.innerHTML = '';
+    bar.hidden = true;
     return;
   }
 
-  tableBody.innerHTML = rows.map(renderRow).join('');
+  const totalPages = productsPageSize === 0 ? 1 : Math.max(1, Math.ceil(total / productsPageSize));
+  if (productsPage > totalPages) productsPage = totalPages;
+
+  const sizeOptions = [25, 50, 100, 0].map((size) => {
+    const label = size === 0 ? 'Tümü' : String(size);
+    return '<option value="' + size + '"' + (size === productsPageSize ? ' selected' : '') + '>' + label + '</option>';
+  }).join('');
+
+  bar.hidden = false;
+  bar.innerHTML =
+    '<label class="products-page-size">Sayfa başına ' +
+      '<select id="productsPageSizeSelect">' + sizeOptions + '</select>' +
+    '</label>' +
+    '<div class="products-page-nav">' +
+      '<button type="button" class="btn-coral outline" id="productsPagePrev"' + (productsPage <= 1 ? ' disabled' : '') + '>‹ Önceki</button>' +
+      '<span class="products-page-info">' + productsPage + ' / ' + totalPages + '</span>' +
+      '<button type="button" class="btn-coral outline" id="productsPageNext"' + (productsPage >= totalPages ? ' disabled' : '') + '>Sonraki ›</button>' +
+    '</div>';
+
+  document.getElementById('productsPageSizeSelect')?.addEventListener('change', (e) => {
+    productsPageSize = Number(e.target.value) || 0;
+    productsPage = 1;
+    renderTable(productRows);
+  });
+  document.getElementById('productsPagePrev')?.addEventListener('click', () => {
+    if (productsPage > 1) {
+      productsPage -= 1;
+      renderTable(productRows);
+    }
+  });
+  document.getElementById('productsPageNext')?.addEventListener('click', () => {
+    productsPage += 1;
+    renderTable(productRows);
+  });
+}
+
+function renderTable(rows) {
+  if (!rows.length) {
+    const colSpan = isChannelCostsPage ? 11 : 14;
+    tableBody.innerHTML =
+      '<tr><td colspan="' + colSpan + '" class="products-empty">' +
+        '<div class="products-empty-state">' +
+          '<span aria-hidden="true" style="font-size:1.8rem">📦</span>' +
+          '<strong>Filtrelere uyan ürün yok</strong>' +
+          '<span>Filtreleri temizleyerek tüm ürünleri görebilirsiniz.</span>' +
+        '</div>' +
+      '</td></tr>';
+    renderProductsPagination(0);
+    return;
+  }
+
+  const totalPages = productsPageSize === 0 ? 1 : Math.max(1, Math.ceil(rows.length / productsPageSize));
+  if (productsPage > totalPages) productsPage = totalPages;
+  const startIndex = productsPageSize === 0 ? 0 : (productsPage - 1) * productsPageSize;
+  const pageRows = productsPageSize === 0 ? rows : rows.slice(startIndex, startIndex + productsPageSize);
+
+  tableBody.innerHTML = pageRows.map(renderRow).join('');
   tableBody.querySelectorAll('tr[data-barcode]').forEach(snapshotRow);
   tableBody.querySelectorAll('.copy-btn').forEach((btn) => {
     btn.addEventListener('click', (e) => {
@@ -147,6 +218,7 @@ function renderTable(rows) {
       navigator.clipboard.writeText(btn.dataset.barcode).then(() => showToast('Barkod kopyalandı'));
     });
   });
+  renderProductsPagination(rows.length);
 }
 
 function renderRow(row) {
@@ -332,31 +404,12 @@ function showToast(msg) {
   showToast._t = setTimeout(() => toastEl.classList.remove('show'), 2600);
 }
 
-function getStoredToken() { return sessionStorage.getItem(TOKEN_KEY) || ''; }
-function redirectToLogin() {
-  window.location.href = '/login?next=' + encodeURIComponent('/marketplace/products');
-}
-function logout() {
-  sessionStorage.removeItem(TOKEN_KEY);
-  redirectToLogin();
-}
-
-function apiHeaders(json) {
-  const h = {};
-  if (json) h['Content-Type'] = 'application/json';
-  const t = getStoredToken();
-  if (t) h.Authorization = 'Bearer ' + t;
-  return h;
-}
+function getStoredToken() { return window.BuyBoxCommon.getStoredToken(); }
+function redirectToLogin() { window.BuyBoxCommon.redirectToLogin(); }
+function logout() { window.BuyBoxCommon.logout(); }
 
 async function authFetch(url, options = {}) {
-  const response = await fetch(url, { ...options, headers: { ...apiHeaders(options.body != null), ...options.headers } });
-  if (response.status === 401) {
-    sessionStorage.removeItem(TOKEN_KEY);
-    redirectToLogin();
-    throw new Error('Yetkisiz');
-  }
-  return response;
+  return window.BuyBoxCommon.authFetch(url, options);
 }
 
 function esc(v) {

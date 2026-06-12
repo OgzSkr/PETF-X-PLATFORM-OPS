@@ -12,8 +12,6 @@ if (logoutBtn) {
   logoutBtn.addEventListener('click', () => window.BuyBoxCommon.logout());
 }
 
-window.BuyBoxCommon.initPlatformNav?.();
-
 async function loadTrendyolSettings() {
   const response = await window.BuyBoxCommon.authFetch('/api/trendyol-settings');
   if (!response.ok) return;

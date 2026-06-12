@@ -91,7 +91,7 @@ function renderPreview(data) {
           (readiness.nextSteps || []).map((s) =>
             `<a href="${esc(s.href)}" class="btn-mini">${esc(s.label)}</a>`
           ).join(' ') +
-          `<a href="/products?tab=${escAttr(CHANNEL_ID)}" class="btn-mini ghost">Ana Ürün Havuzu</a>` +
+          `<a href="/marketnext/matching?tab=${escAttr(CHANNEL_ID)}" class="btn-mini ghost">Ana Ürün Havuzu</a>` +
         `</div></div>`;
   }
 

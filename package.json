@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
+    "dev:local": "PORT=8899 node server.js",
     "start:pm2": "pm2 start ecosystem.config.cjs",
     "stop:pm2": "pm2 stop ecosystem.config.cjs",
     "smoke": "node scripts/smoke-test.js",
@@ -20,6 +21,7 @@
     "ops:seed-integrations": "node scripts/ops-hub-seed-integrations.js",
     "ops:sync-tgo": "node scripts/ops-hub-sync-tgo.js",
     "ops:sync-ys": "node scripts/ops-hub-sync-ys.js",
+    "ops:ys-backfill": "node scripts/ys-backfill-orders-by-id.js",
     "ops:stock-sync": "node scripts/ops-hub-stock-sync.js",
     "ops:poll": "node scripts/ops-hub-poll.js",
     "ops:webhook-test-ys": "node scripts/ops-hub-webhook-test-ys.js",
@@ -36,6 +38,7 @@
     "prod:deploy": "bash scripts/deploy-production.sh",
     "prod:backfill-ys-payload": "node scripts/ops-backfill-ys-payload.js",
     "ops:autopilot": "node scripts/ops-autopilot.js",
+    "ops:prod-daily-sync": "node scripts/ops-prod-daily-sync.js",
     "ops:install-poll": "bash scripts/ops-install-poll-agent.sh",
     "ops:install-tunnel": "bash scripts/ops-install-tunnel-agent.sh",
     "ops:pg-up": "docker compose --env-file deploy/compose.env -f docker-compose.ops.yml up -d",

@@ -822,7 +822,7 @@ function renderProfitTable(data) {
     costsMeta.innerHTML =
       'Maliyet kayıtları: Trendyol Pazaryeri <strong>' + esc(data.costs.trendyol) +
       '</strong> · Diğer kanallar <strong>' + esc(data.costs.otherChannels) +
-      '</strong> · <a href="/products/costs">Kanal maliyetleri</a>';
+      '</strong>';
   }
 
   if (data.updatedAt && costsMeta) {

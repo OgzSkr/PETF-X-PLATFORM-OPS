@@ -114,7 +114,10 @@ await step('Kanal poll (TGO+YS)', async () => {
     });
     child.on('close', (code) => {
       if (code !== 0) reject(new Error(`poll exit ${code}`));
-      else resolve(JSON.parse(out));
+      else {
+        const line = out.trim().split('\n').filter(Boolean).pop() || '{}';
+        resolve(JSON.parse(line));
+      }
     });
   });
 });

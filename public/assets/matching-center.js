@@ -19,12 +19,12 @@ function readMatchingBootstrap() {
 
 let bootstrap = readMatchingBootstrap();
 const SALES_CHANNELS = bootstrap.salesChannels || [];
+const MATCHING_BASE = bootstrap.matchingBase || '/marketnext/matching';
+const INBOX_BASE = bootstrap.inboxBase || `${MATCHING_BASE}/inbox`;
 const CHANNEL_SHORT_LABELS = {
   'uber-eats': 'Uber',
-  'trendyol-marketplace': 'Trendyol',
   getir: 'Getir',
-  yemeksepeti: 'YemekSepeti',
-  woocommerce: 'WooCommerce'
+  yemeksepeti: 'YemekSepeti'
 };
 const MASTER_SORT_DEFAULT_DIR = {
   name: 'asc',
@@ -638,7 +638,7 @@ function switchTab(tab, options = {}) {
 
   document.getElementById('tabMaster').hidden = tab !== 'master';
   document.getElementById('tabUber').hidden = !isUber;
-  document.getElementById('tabChannelPlanned').hidden = !(isPlanned || isTrendyol || isWooCommerce || isYemeksepeti);
+  document.getElementById('tabChannelPlanned').hidden = !(isPlanned || isYemeksepeti);
   document.getElementById('tabWorkbench').hidden = tab !== 'workbench';
   document.getElementById('tabCompare').hidden = tab !== 'compare';
   document.getElementById('tabDataQuality').hidden = tab !== 'data-quality';

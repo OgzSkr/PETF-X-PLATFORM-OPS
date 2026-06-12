@@ -51,14 +51,14 @@ test('buildMatchingQueue aggregates channel backlog', () => {
     name: 'Test'
   });
   db.productMatching.channelProducts.push({
-    channelId: 'trendyol-marketplace',
+    channelId: 'yemeksepeti',
     channelProductId: '8690001112223',
     channelBarcode: '8690001112223',
     channelName: 'Test'
   });
   db.productMatching.mappings.push({
     id: 'map-1',
-    channelId: 'trendyol-marketplace',
+    channelId: 'yemeksepeti',
     channelProductId: '8690001112223',
     channelBarcode: '8690001112223',
     masterProductId: 'mp-8690001112223',
@@ -66,9 +66,9 @@ test('buildMatchingQueue aggregates channel backlog', () => {
   });
 
   const queue = buildMatchingQueue(db, { productMatchingMode: 'hybrid' });
-  const trendyol = queue.channels.find((row) => row.channelId === 'trendyol-marketplace');
-  assert.ok(trendyol);
-  assert.equal(trendyol.autoPendingConfirm, 1);
+  const ys = queue.channels.find((row) => row.channelId === 'yemeksepeti');
+  assert.ok(ys);
+  assert.equal(ys.autoPendingConfirm, 1);
   assert.equal(queue.totals.queue, 1);
 });
 
@@ -121,9 +121,9 @@ test('channelReadyPercent calculates confirmed ratio', () => {
   assert.equal(channelReadyPercent({ productCount: 0, manualConfirmed: 0 }), 0);
 });
 
-test('catalogChannelOpsConfig exposes trendyol, woocommerce and yemeksepeti', () => {
-  assert.ok(catalogChannelOpsConfig('trendyol-marketplace'));
-  assert.ok(catalogChannelOpsConfig('woocommerce'));
+test('catalogChannelOpsConfig exposes MarketNext yemeksepeti only', () => {
+  assert.equal(catalogChannelOpsConfig('trendyol-marketplace'), null);
+  assert.equal(catalogChannelOpsConfig('woocommerce'), null);
   assert.ok(catalogChannelOpsConfig('yemeksepeti'));
   assert.equal(catalogChannelOpsConfig('uber-eats'), null);
 });

@@ -330,8 +330,6 @@
 
 .pf-status-panel { min-height: 72px; }
 
-.pf-products-costs .channel-costs-intro { margin-bottom: 16px; }
-
 @media (max-width: 960px) {
   .pf-shipping-grid { grid-template-columns: 1fr; }
   .pf-dhl-dl { grid-template-columns: 1fr; }

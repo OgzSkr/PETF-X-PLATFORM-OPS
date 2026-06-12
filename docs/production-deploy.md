@@ -38,7 +38,8 @@ Deploy sırası: build → test → config validation → migration → up → r
 |-------|-----|
 | Yemeksepeti sipariş | `https://api.petfix.com.tr/webhooks/v1/yemeksepeti/orders` |
 | Yemeksepeti katalog | `https://api.petfix.com.tr/webhooks/v1/yemeksepeti/catalog` |
-| Getir sipariş | `https://api.petfix.com.tr/webhooks/v1/getir/orders` |
+| Getir yeni sipariş | `https://api.petfix.com.tr/webhooks/v1/getir/orders/new` |
+| Getir iptal | `https://api.petfix.com.tr/webhooks/v1/getir/orders/cancelled` |
 
 Geçici Cloudflare tunnel URL'lerini production webhook olarak kullanmayın.
 

@@ -5,13 +5,16 @@ import {
   DEFAULT_MATCHING_SYNC_CHANNELS
 } from '../lib/product-matching/matching-sync-schedule.js';
 
-test('default sync channels include yemeksepeti', () => {
+test('default sync channels are MarketNext only', () => {
   assert.ok(DEFAULT_MATCHING_SYNC_CHANNELS.includes('yemeksepeti'));
+  assert.ok(DEFAULT_MATCHING_SYNC_CHANNELS.includes('uber-eats'));
+  assert.ok(!DEFAULT_MATCHING_SYNC_CHANNELS.includes('woocommerce'));
+  assert.ok(!DEFAULT_MATCHING_SYNC_CHANNELS.includes('trendyol-marketplace'));
 });
 
-test('normalizeMatchingSyncSettings keeps yemeksepeti when requested', () => {
+test('normalizeMatchingSyncSettings drops non-MarketNext channels', () => {
   const settings = normalizeMatchingSyncSettings({
-    channels: ['yemeksepeti', 'woocommerce']
+    channels: ['yemeksepeti', 'woocommerce', 'trendyol-marketplace', 'uber-eats']
   });
-  assert.deepEqual(settings.channels, ['yemeksepeti', 'woocommerce']);
+  assert.deepEqual(settings.channels, ['yemeksepeti', 'uber-eats']);
 });

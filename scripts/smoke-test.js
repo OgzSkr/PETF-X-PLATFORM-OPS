@@ -221,9 +221,6 @@ async function main() {
   await check('settings page', `${base}/admin/settings`);
   checks.push('settings-page');
 
-  await check('channel costs page', `${base}/products/costs`);
-  checks.push('channel-costs-page');
-
   console.log(JSON.stringify({ ok: true, base, checks: checks.length, passed: checks }));
 }
 

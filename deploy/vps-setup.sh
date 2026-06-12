@@ -20,10 +20,16 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq docker.io docker-compose-plugin nginx certbot python3-certbot-nginx curl git ufw
+apt-get install -y -qq docker.io docker-compose-v2 nginx certbot python3-certbot-nginx curl git ufw rsync || \
+apt-get install -y -qq docker.io nginx certbot python3-certbot-nginx curl git ufw rsync
 
 systemctl enable docker nginx
 systemctl start docker
+
+# Güzel.net VPS'te apache2 önceden kurulu olabilir — port 80 çakışmasını önle
+systemctl stop apache2 2>/dev/null || true
+systemctl disable apache2 2>/dev/null || true
+systemctl start nginx
 
 if ! id "$DEPLOY_USER" &>/dev/null; then
   useradd -m -s /bin/bash "$DEPLOY_USER"

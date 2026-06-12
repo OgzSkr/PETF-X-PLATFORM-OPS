@@ -31,7 +31,13 @@ async function main() {
         const secret = ys?.config?.webhookSecret;
         console.log(`Webhook Secret:\n  ${secret ? '(kayıtlı — Entegrasyonlar > YS > Gelişmiş ayarlar veya DB)' : '(henüz yok — integrations kaydından üretilir)'}`);
         console.log('\n--- Getir ---');
-        console.log(`Sipariş Webhook URL:\n  ${data.webhooks.endpoints.getirOrders}`);
+        console.log(`Yeni Sipariş Webhook URL:\n  ${data.webhooks.endpoints.getirOrdersNew}`);
+        console.log(`İptal Webhook URL:\n  ${data.webhooks.endpoints.getirOrdersCancelled}`);
+        const getir = data.integrations.find((i) => i.channel === 'getir');
+        const getirSecret = getir?.config?.webhookSecret;
+        console.log(
+          `x-api-key:\n  ${getirSecret ? '(kayıtlı — Entegrasyonlar > Getir veya GETIR_WEBHOOK_SECRET)' : '(henüz yok — integrations kaydından üretilir)'}`
+        );
         await closeOpsPool();
       }
     } catch (error) {
@@ -45,7 +51,8 @@ async function main() {
     console.log(`Sipariş Webhook URL:\n  ${base}/webhooks/v1/yemeksepeti/orders`);
     console.log(`Katalog Callback URL:\n  ${base}/webhooks/v1/yemeksepeti/catalog`);
     console.log('\n--- Getir (env) ---');
-    console.log(`Sipariş Webhook URL:\n  ${base}/webhooks/v1/getir/orders`);
+    console.log(`Yeni Sipariş Webhook URL:\n  ${base}/webhooks/v1/getir/orders/new`);
+    console.log(`İptal Webhook URL:\n  ${base}/webhooks/v1/getir/orders/cancelled`);
   }
 
   console.log('\n--- Partner portal adımları ---');

@@ -101,7 +101,7 @@ async function main() {
   }
 
   report.finishedAt = new Date().toISOString();
-  console.log(JSON.stringify(report, null, 2));
+  console.log(JSON.stringify(report));
 }
 
 main().catch((error) => {

@@ -997,7 +997,7 @@ function renderQualityBanner(dataQuality) {
     '<strong>' + count + ' siparişte veri uyarısı</strong>' +
     '<span>Kâr hesabı eksik maliyet veya komisyon nedeniyle güvenilir olmayabilir.</span>' +
     (topIssues ? '<span class="orders-quality-detail">' + topIssues + '</span>' : '') +
-    '<a href="' + esc(isChannelPage ? '/products/costs?emptyCostOnly=1' : '/marketplace/products?emptyCostOnly=1') + '">Eksik maliyetleri düzelt</a>';
+    '<a href="' + esc(isChannelPage ? '/marketnext/matching/masters' : '/marketplace/products?emptyCostOnly=1') + '">Eksik maliyetleri düzelt</a>';
 }
 
 function matchingPoolUrl() {

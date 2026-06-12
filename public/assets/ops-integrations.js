@@ -199,7 +199,10 @@ function renderDetailForm(detail) {
     ops.bindCopyButtons(webhookFields);
   } else if (detail.channel === 'getir' && webhooks) {
     webhookSetup.classList.remove('hidden');
-    webhookFields.innerHTML = ops.renderCopyField('Getir Webhook URL', webhooks.getirOrders);
+    webhookFields.innerHTML =
+      ops.renderCopyField('Yeni Sipariş Webhook URL', webhooks.getirOrdersNew) +
+      ops.renderCopyField('İptal Webhook URL', webhooks.getirOrdersCancelled) +
+      ops.renderCopyField('x-api-key (form + sunucu)', config.webhookSecret || '', { secret: true });
     ops.bindCopyButtons(webhookFields);
   } else {
     webhookSetup.classList.add('hidden');

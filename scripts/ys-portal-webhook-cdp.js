@@ -1,24 +1,40 @@
 #!/usr/bin/env node
 /**
  * Chrome DevTools Protocol ile YS Partner Portal webhook formunu doldurur.
- * Cevizlibağ Chrome profili (Profile 2) oturumunu kopyalayarak kullanır.
+ *
+ * GÜVENLİK:
+ * - Asla ~/Library/.../Google/Chrome dizinini --user-data-dir olarak kullanmaz.
+ * - Yalnızca /tmp altındaki kopya profille ayrı bir Chrome başlatır.
+ * - killall "Google Chrome" ÇALIŞTIRMAZ; yalnızca kendi CDP portunu kapatır.
+ * - Gerçek profilden yalnızca OKUMA (rsync kaynak → temp); geri yazma yok.
+ *
+ *   node scripts/ys-portal-webhook-cdp.js
+ *   CHROME_RESYNC=1 node scripts/...   # Chrome kapalıyken profili yeniden kopyala
  */
 import { spawn, execSync } from 'node:child_process';
 import { readEnvFile } from '../lib/env.js';
 import { paths } from '../lib/config.js';
 import { resolveOpsHubConfig } from '../lib/ops-hub/config.js';
 import { buildYemeksepetiPortalWebhookSecret } from '../lib/ops-hub/webhooks/webhook-auth.js';
+import {
+  assertNotRealChromeUserDataDir,
+  CHROME_USER_DATA_DIR,
+  isGoogleChromeRunningAsync
+} from '../lib/chrome-profile-guard.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const CHROME_SRC = path.join(os.homedir(), 'Library/Application Support/Google/Chrome');
 const CHROME_PROFILE = process.env.CHROME_PROFILE || 'Profile 2'; // Cevizlibağ
-const PROFILE = path.join(os.tmpdir(), 'petfix-chrome-cevizlibag');
+const PROFILE = path.resolve(process.env.CHROME_AUTOMATION_DIR
+  || path.join(os.tmpdir(), 'petfix-chrome-automation'));
 const CDP_PORT = Number(process.env.CDP_PORT || 9333);
+const FORCE_RESYNC = process.env.CHROME_RESYNC === '1';
 const CHAIN_ID = '24fbaadf-e4d9-4040-87ce-7fa93ff26a19';
 const TARGET_URL = `https://partner-app.yemeksepeti.com/shops-integrations/chain/${CHAIN_ID}`;
+
+assertNotRealChromeUserDataDir(PROFILE);
 
 const platformEnv = await readEnvFile(paths.platformEnv);
 const config = resolveOpsHubConfig(platformEnv);
@@ -36,28 +52,70 @@ async function fetchJson(url) {
   return res.json();
 }
 
-function syncCevizlibagProfile() {
-  fs.mkdirSync(PROFILE, { recursive: true });
-  const srcProfile = path.join(CHROME_SRC, CHROME_PROFILE);
+function buildMinimalLocalState() {
+  const srcStatePath = path.join(CHROME_USER_DATA_DIR, 'Local State');
+  if (!fs.existsSync(srcStatePath)) {
+    return { profile: { info_cache: {} } };
+  }
+  const src = JSON.parse(fs.readFileSync(srcStatePath, 'utf8'));
+  const info = src?.profile?.info_cache?.[CHROME_PROFILE];
+  if (!info) {
+    throw new Error(`Local State içinde ${CHROME_PROFILE} kaydı yok.`);
+  }
+  return {
+    profile: {
+      info_cache: {
+        [CHROME_PROFILE]: info
+      },
+      last_used: CHROME_PROFILE
+    }
+  };
+}
+
+async function syncAutomationProfileCopy() {
+  const srcProfile = path.join(CHROME_USER_DATA_DIR, CHROME_PROFILE);
   const dstProfile = path.join(PROFILE, CHROME_PROFILE);
   if (!fs.existsSync(srcProfile)) {
     throw new Error(`Chrome profili bulunamadı: ${srcProfile}`);
   }
-  console.log(`Profil kopyalanıyor: ${CHROME_PROFILE} (Cevizlibağ)…`);
-  execSync(`rsync -a --delete "${srcProfile}/" "${dstProfile}/"`, { stdio: 'inherit' });
-  for (const file of ['Local State', 'First Run']) {
-    const src = path.join(CHROME_SRC, file);
-    if (fs.existsSync(src)) {
-      fs.copyFileSync(src, path.join(PROFILE, file));
+
+  const chromeRunning = await isGoogleChromeRunningAsync();
+  const dstExists = fs.existsSync(dstProfile);
+
+  if (chromeRunning && !FORCE_RESYNC) {
+    if (!dstExists) {
+      throw new Error(
+        'Chrome açık ve otomasyon kopyası yok. Chrome\'u kapatın veya CHROME_RESYNC=1 ile tekrar deneyin.'
+      );
     }
+    console.log('Chrome açık — mevcut /tmp kopyası kullanılacak (yeniden rsync yok).');
+    console.log('Güncel oturum için: Chrome\'u kapat → CHROME_RESYNC=1 node scripts/ys-portal-webhook-cdp.js');
+    return;
   }
+
+  if (chromeRunning && FORCE_RESYNC) {
+    throw new Error(
+      'CHROME_RESYNC=1 için önce normal Chrome\'u kapatın (profil dosyaları kilitli olabilir).'
+    );
+  }
+
+  fs.mkdirSync(PROFILE, { recursive: true });
+  console.log(`Profil kopyalanıyor (salt okuma): ${CHROME_PROFILE} → ${PROFILE}`);
+  execSync(`rsync -a --delete "${srcProfile}/" "${dstProfile}/"`, { stdio: 'inherit' });
+
+  const minimalState = buildMinimalLocalState();
+  fs.writeFileSync(
+    path.join(PROFILE, 'Local State'),
+    `${JSON.stringify(minimalState)}\n`
+  );
+  console.log('Minimal Local State yazıldı (yalnızca otomasyon kopyasında).');
 }
 
-function stopCdpChrome() {
+function stopAutomationChromeOnly() {
   try {
     execSync(`pkill -f "remote-debugging-port=${CDP_PORT}"`, { stdio: 'ignore' });
   } catch {
-    /* yok */
+    /* otomasyon chrome yok */
   }
 }
 
@@ -240,11 +298,13 @@ async function findYsTab() {
 }
 
 async function main() {
-  stopCdpChrome();
+  stopAutomationChromeOnly();
   await sleep(1500);
-  syncCevizlibagProfile();
+  await syncAutomationProfileCopy();
 
   console.log(`Chrome CDP (${CHROME_PROFILE}) → port ${CDP_PORT}`);
+  console.log(`user-data-dir: ${PROFILE} (gerçek profil DEĞİL)`);
+
   const chrome = spawn(CHROME, [
     `--remote-debugging-port=${CDP_PORT}`,
     `--user-data-dir=${PROFILE}`,
@@ -278,7 +338,7 @@ async function main() {
 
   if (!status?.loggedIn) {
     console.error('\nCevizlibağ profilinde YS oturumu yok veya süresi dolmuş.');
-    console.error('Açılan Chrome penceresinde giriş yapın, sonra tekrar çalıştırın.');
+    console.error('Açılan otomasyon Chrome penceresinde giriş yapın, sonra tekrar çalıştırın.');
     process.exit(2);
   }
 
@@ -297,11 +357,11 @@ async function main() {
   console.log('\nSonuç:', JSON.stringify(result, null, 2));
 
   if (!result?.ok) {
-    console.log('\nForm tam doldurulamadı. CDP Chrome penceresinde Settings → API → Order Webhook Settings kontrol edin.');
+    console.log('\nForm tam doldurulamadı. Otomasyon Chrome penceresinde Settings → API → Order Webhook Settings kontrol edin.');
     process.exit(3);
   }
 
-  console.log('\n✓ Webhook portal kaydı tamamlandı (Cevizlibağ profili).');
+  console.log('\n✓ Webhook portal kaydı tamamlandı (Cevizlibağ profili kopyası).');
 }
 
 main().catch((err) => {

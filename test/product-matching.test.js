@@ -116,9 +116,24 @@ test('proposeMatchForChannelProduct reports missing master', () => {
   assert.equal(proposal.status, MAPPING_STATUS.MISSING_MASTER);
 });
 
+test('proposeMatchForChannelProduct auto-matches when barcode matches despite title mismatch', () => {
+  const masters = [{
+    id: 'mp-8690001112223',
+    benimposBarcode: '8690001112223',
+    name: 'Royal Canin Kedi Maması 400g'
+  }];
+  const proposal = proposeMatchForChannelProduct({
+    channelBarcode: '8690001112223',
+    channelName: 'Tamamen Farklı İsim 2kg'
+  }, masters);
+
+  assert.equal(proposal.status, MAPPING_STATUS.AUTO_MATCHED);
+  assert.ok(proposal.reasons.includes('isim_uyusmazligi') || proposal.reasons.includes('gramaj_farkli'));
+});
+
 test('productPoolUrlForMappingStatus opens map modal for unmapped barcode', () => {
-  const url = productPoolUrlForMappingStatus('trendyol-marketplace', '8690001112223', 'missing_master');
-  assert.match(url, /tab=workbench/);
+  const url = productPoolUrlForMappingStatus('uber-eats', '8690001112223', 'missing_master');
+  assert.match(url, /\/marketnext\/matching\/inbox/);
   assert.match(url, /queueMode=missing_master/);
   assert.match(url, /q=8690001112223/);
 });
@@ -135,7 +150,7 @@ test('orderDetailPageUrl deep links to channel order detail', () => {
     orderDetailPageUrl('trendyol-marketplace', '11269278264', { days: 1 }),
     '/siparisler?order=11269278264&days=1'
   );
-  assert.match(orderDetailPageUrl('uber-eats', '998877'), /^\/uber-eats\?order=998877/);
+  assert.match(orderDetailPageUrl('uber-eats', '998877'), /^\/marketnext\/orders\/uber-eats\?order=998877/);
 });
 
 test('findMappingForChannelLine resolves WooCommerce SKU via order barcode', () => {

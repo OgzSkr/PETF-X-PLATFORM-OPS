@@ -19,7 +19,7 @@ DOMAIN="${OPS_DOMAIN:-api.petfix.com.tr}"
 SSH=(ssh -i "$VPS_SSH_KEY" -o StrictHostKeyChecking=accept-new "${VPS_USER}@${VPS_HOST}")
 RSYNC=(rsync -az --delete
   -e "ssh -i $VPS_SSH_KEY -o StrictHostKeyChecking=accept-new"
-  --exclude node_modules
+  --exclude .env
   --exclude .git
   --exclude data/buybox-history.jsonl
   --exclude data/db.json
@@ -33,26 +33,25 @@ echo "==> VPS bağlantı testi: ${VPS_USER}@${VPS_HOST}"
 echo "==> Uzak dizin: $APP_DIR"
 "${SSH[@]}" "mkdir -p '$APP_DIR'"
 
-if [[ ! -f "$ROOT/.env" ]]; then
-  echo "HATA: .env yok — önce yerel .env hazırlayın."
+if [[ ! -f "$ROOT/.env.production" ]]; then
+  echo "==> .env.production yok — prepare-env-production.sh çalıştırılıyor"
+  bash "$ROOT/scripts/prepare-env-production.sh"
+fi
+
+if [[ ! -f "$ROOT/.env.production" ]]; then
+  echo "HATA: .env.production yok — bash scripts/prepare-env-production.sh"
   exit 1
 fi
 
 echo "==> Kod senkronu"
 "${RSYNC[@]}" "$ROOT/" "${VPS_USER}@${VPS_HOST}:${APP_DIR}/"
 
-echo "==> Production .env (OPS_PUBLIC + HOST ayarları)"
+echo "==> Production .env doğrulama"
 "${SSH[@]}" bash -s <<REMOTE
 set -euo pipefail
 cd '$APP_DIR'
-grep -q '^OPS_PUBLIC_API_BASE_URL=' .env 2>/dev/null || \
-  echo 'OPS_PUBLIC_API_BASE_URL=https://${DOMAIN}' >> .env
-sed -i.bak -E 's|^OPS_PUBLIC_API_BASE_URL=.*|OPS_PUBLIC_API_BASE_URL=https://${DOMAIN}|' .env
-sed -i.bak -E 's|^HOST=.*|HOST=0.0.0.0|' .env
-sed -i.bak -E 's|^NODE_ENV=.*|NODE_ENV=production|' .env
-grep -q '^OPS_POSTGRES_URL=postgresql://petfix:petfix@ops-postgres' .env && \
-  sed -i.bak 's|^OPS_POSTGRES_URL=.*|OPS_POSTGRES_URL=postgresql://petfix:petfix@ops-postgres:5432/petfix_ops|' .env || true
-rm -f .env.bak
+grep -q '^OPS_PUBLIC_API_BASE_URL=' .env.production
+grep -q '^GETIR_WEBHOOK_SECRET=' .env.production
 REMOTE
 
 echo "==> VPS kurulum (docker + nginx + certbot)"
@@ -97,5 +96,6 @@ echo ""
 echo "Sonraki adımlar:"
 echo "  1. DNS A kaydı: ${DOMAIN} → ${VPS_HOST}"
 echo "  2. npm run ops:verify-deploy -- https://${DOMAIN}"
-echo "  3. YS portal webhook URL: https://${DOMAIN}/webhooks/v1/yemeksepeti/orders"
-echo "  4. npm run ops:webhook-setup"
+echo "  3. Getir yeni sipariş: https://${DOMAIN}/webhooks/v1/getir/orders/new"
+echo "  4. Getir iptal: https://${DOMAIN}/webhooks/v1/getir/orders/cancelled"
+echo "  5. npm run ops:webhook-setup"
